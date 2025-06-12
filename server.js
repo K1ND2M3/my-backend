@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 5000;
 const corsOptions = {
   origin: [
     'http://localhost:3000', // สำหรับตอนพัฒนา
-    'https://queue-app-zeta.vercel.app/' // << ใส่ URL ที่ได้จาก Vercel
+    'https://queue-app-zeta.vercel.app' // << ใส่ URL ที่ได้จาก Vercel
   ]
 };
 app.use(cors(corsOptions));

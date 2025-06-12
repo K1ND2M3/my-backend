@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 const app = express();
@@ -34,6 +35,13 @@ const queueSchema = new mongoose.Schema({
 
 queueSchema.index({ autoDeleteAt: 1 }, { expireAfterSeconds: 0 });
 
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  role: { type: String, default: 'admin' }
+});
+
+const User = mongoose.model('User', userSchema);
 
 const Queue = mongoose.model('Queue', queueSchema);
 const authMiddleware = require('./middleware/authMiddleware');
@@ -147,25 +155,22 @@ app.delete('/api/queues/:id', authMiddleware, async (req, res) => {
   }
 });
 
+
 app.post('/api/users/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const validUser = "admin@test.com";
-    const validPassword = "1234";
 
-    if (email !== validUser || password !== validPassword) {
-
+    const user = await User.findOne({ email });
+    if (!user) {
       return res.status(401).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
     }
 
-    const payload = {
-      user: {
-        id: "admin_user_01",
-        role: "admin"
-      }
-    };
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "อีเมลหรือรหัสผ่านไม่ถูกต้อง" });
+    }
 
-
+    const payload = { user: { id: user.id, role: user.role } };
     jwt.sign(
       payload,
       process.env.JWT_SECRET,

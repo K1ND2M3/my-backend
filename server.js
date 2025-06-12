@@ -150,7 +150,11 @@ app.delete('/api/queues/:id', authMiddleware, async (req, res) => {
     if (!deletedQueue) {
       return res.status(404).json('Error: Queue not found');
     }
-    res.json({ message: 'Queue deleted successfully.' });
+    await Queue.updateMany(
+      { order: { $gt: deletedQueue.order } },
+      { $inc: { order: -1 } }
+    );
+    res.json({ message: 'Queue deleted and reordered successfully.' });
   } catch (err) {
     res.status(400).json('Error: ' + err);
   }

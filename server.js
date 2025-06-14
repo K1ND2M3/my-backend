@@ -154,7 +154,11 @@ app.delete('/api/queues/:id', authMiddleware, async (req, res) => {
       { order: { $gt: deletedQueue.order } },
       { $inc: { order: -1 } }
     );
-    res.json({ message: 'Queue deleted and reordered successfully.' });
+
+    const updatedQueues = await Queue.find().sort({ order: 1 });
+
+    res.json(updatedQueues);
+
   } catch (err) {
     res.status(400).json('Error: ' + err);
   }
@@ -191,12 +195,6 @@ app.post('/api/users/login', async (req, res) => {
     res.status(500).send('Server Error');
   }
 });
-
-app.use(cors({
-  origin: 'https://zentstudio.co.in/',
-  credentials: true
-}));
-
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

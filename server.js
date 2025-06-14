@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const ONE_HOUR_IN_MS = 60 * 60 * 1000;
 
 
 app.use(cors());
@@ -99,14 +100,24 @@ app.put('/api/queues/:id', authMiddleware, async (req, res) => {
     }
 
     const oldOrder = originalQueue.order;
+    const oldStatus = originalQueue.status;
 
-    // 2. อัปเดตข้อมูลพื้นฐาน
+    // 2. จัดการ autoDeleteAt เมื่อเปลี่ยนสถานะ
+    if (status === 'เสร็จสิ้น' && oldStatus !== 'เสร็จสิ้น') {
+      // ตั้งเวลาลบใน 1 ชั่วโมงถ้าปรับเป็นสถานะ "เสร็จสิ้น"
+      originalQueue.autoDeleteAt = new Date(Date.now() + ONE_HOUR_IN_MS); 
+    } else if (status !== 'เสร็จสิ้น' && oldStatus === 'เสร็จสิ้น') {
+      // ยกเลิกการลบอัตโนมัติถ้าเปลี่ยนออกจากสถานะ "เสร็จสิ้น"
+      originalQueue.autoDeleteAt = null;
+    }
+
+    // 3. อัปเดตข้อมูลพื้นฐาน
     originalQueue.name = name;
     originalQueue.type = type;
     originalQueue.status = status;
     await originalQueue.save();
 
-    // 3. หากมีการเปลี่ยน order
+    // 4. หากมีการเปลี่ยน order
     if (newOrder !== oldOrder) {
       // ย้ายคิวอื่นๆ ให้เหมาะสม
       if (newOrder < oldOrder) {
@@ -114,7 +125,7 @@ app.put('/api/queues/:id', authMiddleware, async (req, res) => {
         await Queue.updateMany(
           { 
             order: { $gte: newOrder, $lt: oldOrder },
-            _id: { $ne: queueId } // ไม่รวมคิวที่กำลังแก้ไข
+            _id: { $ne: queueId }
           },
           { $inc: { order: 1 } }
         );
@@ -133,7 +144,7 @@ app.put('/api/queues/:id', authMiddleware, async (req, res) => {
       await Queue.findByIdAndUpdate(queueId, { order: newOrder });
     }
 
-    // 4. ส่งข้อมูลทั้งหมดกลับหลังอัปเดต
+    // 5. ส่งข้อมูลทั้งหมดกลับหลังอัปเดต
     const updatedQueues = await Queue.find().sort({ order: 1 });
     res.json(updatedQueues);
 

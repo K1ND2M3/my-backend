@@ -35,6 +35,14 @@ const queueSchema = new mongoose.Schema({
   timestamps: true,
 });
 
+queueSchema.pre('deleteOne', { document: true, query: false }, async function() {
+  const deletedOrder = this.order;
+  await this.model('Queue').updateMany(
+    { order: { $gt: deletedOrder } },
+    { $inc: { order: -1 } }
+  );
+});
+
 queueSchema.index({ autoDeleteAt: 1 }, { expireAfterSeconds: 0 });
 
 const userSchema = new mongoose.Schema({
@@ -203,6 +211,24 @@ app.post('/api/users/login', async (req, res) => {
   } catch (error) {
     console.error(error.message);
     res.status(500).send('Server Error');
+  }
+});
+
+connection.once('open', () => {
+  console.log("MongoDB database connection established successfully");
+  
+  if (mongoose.connection.readyState === 1) { // ถ้าเชื่อมต่อแล้ว
+    const queueChangeStream = Queue.watch([], { fullDocument: 'updateLookup' });
+    
+    queueChangeStream.on('change', async (change) => {
+      if (change.operationType === 'delete') {
+        const deletedOrder = change.documentKey.order;
+        await Queue.updateMany(
+          { order: { $gt: deletedOrder } },
+          { $inc: { order: -1 } }
+        );
+      }
+    });
   }
 });
 

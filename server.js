@@ -87,56 +87,55 @@ app.post('/api/queues' , authMiddleware, async (req, res) => {
   }
 });
 
-app.put('/api/queues/:id', authMiddleware, async (req,res) => {
+app.put('/api/queues/:id', authMiddleware, async (req, res) => {
   try {
     const queueId = req.params.id;
     const { order: newOrder, name, type, status } = req.body;
 
+    // 1. หาคิวที่จะแก้ไข
     const originalQueue = await Queue.findById(queueId);
     if (!originalQueue) {
       return res.status(404).json('Error: Queue not found');
     }
+
     const oldOrder = originalQueue.order;
-    const oldStatus = originalQueue.status;
 
-    let autoDeleteUpdate = {};
-    const ONE_HOUR_IN_MS = 60 * 60 * 1000;
-
-    if (status === 'เสร็จสิ้น' && oldStatus !== 'เสร็จสิ้น') {
-      autoDeleteUpdate.autoDeleteAt = new Date(Date.now() + ONE_HOUR_IN_MS);
-    }
-
-    else if (status !== 'เสร็จสิ้น' && oldStatus === 'เสร็จสิ้น') {
-      autoDeleteUpdate.autoDeleteAt = null;
-    }
-
+    // 2. อัปเดตข้อมูลพื้นฐาน
     originalQueue.name = name;
     originalQueue.type = type;
     originalQueue.status = status;
-    if (autoDeleteUpdate.hasOwnProperty('autoDeleteAt')) {
-      originalQueue.autoDeleteAt = autoDeleteUpdate.autoDeleteAt;
-    }
     await originalQueue.save();
 
+    // 3. หากมีการเปลี่ยน order
     if (newOrder !== oldOrder) {
-      if (newOrder > oldOrder) {
-        await Queue.updateMany(
-          { order: {$gt: oldOrder, $lte: newOrder }},
-          { $inc: { order: -1 }}
-        );
-      }
-
+      // ย้ายคิวอื่นๆ ให้เหมาะสม
       if (newOrder < oldOrder) {
+        // กรณีย้ายขึ้น (เช่น จาก 3 เป็น 1)
         await Queue.updateMany(
-          { order: { $gte: newOrder, $lt: oldOrder }},
-          { $inc: { order: 1 }}
+          { 
+            order: { $gte: newOrder, $lt: oldOrder },
+            _id: { $ne: queueId } // ไม่รวมคิวที่กำลังแก้ไข
+          },
+          { $inc: { order: 1 } }
+        );
+      } else {
+        // กรณีย้ายลง (เช่น จาก 1 เป็น 3)
+        await Queue.updateMany(
+          { 
+            order: { $gt: oldOrder, $lte: newOrder },
+            _id: { $ne: queueId }
+          },
+          { $inc: { order: -1 } }
         );
       }
 
+      // อัปเดต order ของคิวนี้
       await Queue.findByIdAndUpdate(queueId, { order: newOrder });
     }
 
-    res.json('Queue updated successfully.');
+    // 4. ส่งข้อมูลทั้งหมดกลับหลังอัปเดต
+    const updatedQueues = await Queue.find().sort({ order: 1 });
+    res.json(updatedQueues);
 
   } catch (err) {
     res.status(400).json('Error: ' + err);

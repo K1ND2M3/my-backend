@@ -192,6 +192,11 @@ app.post('/api/users/login', async (req, res) => {
   }
 });
 
+app.use(cors({
+  origin: 'https://zentstudio.co.in/',
+  credentials: true
+}));
+
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

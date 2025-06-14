@@ -7,7 +7,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const ONE_HOUR_IN_MS = 60 * 60 * 1000;
+const ONE_HOUR_IN_MS = 60 * 1000;
 
 
 app.use(cors());
@@ -35,23 +35,33 @@ const queueSchema = new mongoose.Schema({
   timestamps: true,
 });
 
-queueSchema.pre('deleteOne', { document: true, query: false }, async function() {
-  const deletedOrder = this.order;
-  await this.model('Queue').updateMany(
-    { order: { $gt: deletedOrder } },
-    { $inc: { order: -1 } }
-  );
+queueSchema.pre('findOneAndDelete', async function(next) {
+  try {
+    // this.getQuery() จะให้เงื่อนไขการค้นหา (เช่น _id)
+    const docToDelete = await this.model.findOne(this.getQuery());
+    if (docToDelete) {
+      const deletedOrder = docToDelete.order;
+      // ไปอัปเดต order ของ document อื่นๆ ที่มี order มากกว่า
+      await this.model.updateMany(
+        { order: { $gt: deletedOrder } },
+        { $inc: { order: -1 } }
+      );
+    }
+    next(); // ไปขั้นตอนต่อไป (ทำการลบจริงๆ)
+  } catch (error) {
+    next(error);
+  }
 });
 
 queueSchema.index({ autoDeleteAt: 1 }, { expireAfterSeconds: 0 });
+
+const User = mongoose.model('User', userSchema);
 
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, default: 'admin' }
 });
-
-const User = mongoose.model('User', userSchema);
 
 const Queue = mongoose.model('Queue', queueSchema);
 const authMiddleware = require('./middleware/authMiddleware');
@@ -168,15 +178,9 @@ app.delete('/api/queues/:id', authMiddleware, async (req, res) => {
     if (!deletedQueue) {
       return res.status(404).json('Error: Queue not found');
     }
-    await Queue.updateMany(
-      { order: { $gt: deletedQueue.order } },
-      { $inc: { order: -1 } }
-    );
-
+    // ส่งข้อมูลทั้งหมดที่อัปเดตแล้วกลับไป
     const updatedQueues = await Queue.find().sort({ order: 1 });
-
     res.json(updatedQueues);
-
   } catch (err) {
     res.status(400).json('Error: ' + err);
   }

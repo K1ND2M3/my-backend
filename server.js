@@ -45,13 +45,13 @@ queueSchema.pre('deleteOne', { document: true, query: false }, async function() 
 
 queueSchema.index({ autoDeleteAt: 1 }, { expireAfterSeconds: 0 });
 
-const User = mongoose.model('User', userSchema);
-
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   role: { type: String, default: 'admin' }
 });
+
+const User = mongoose.model('User', userSchema);
 
 const Queue = mongoose.model('Queue', queueSchema);
 const authMiddleware = require('./middleware/authMiddleware');
@@ -181,6 +181,7 @@ app.delete('/api/queues/:id', authMiddleware, async (req, res) => {
     res.status(400).json('Error: ' + err);
   }
 });
+
 
 app.post('/api/users/login', async (req, res) => {
   try {
